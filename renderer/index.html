@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zero Studio</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="app">
+  <!-- 顶部栏 -->
+  <header id="header">
+    <div class="brand">
+      <span class="logo">⏺</span>
+      <h1>Zero <span>Studio</span></h1>
+    </div>
+    <div class="header-info" id="folderInfo">—</div>
+    <div class="header-actions">
+      <button id="btnScan" class="btn">📂 选择文件夹</button>
+      <button id="btnRefresh" class="btn btn-outline">🔄 刷新</button>
+    </div>
+  </header>
+
+  <!-- 摘要卡片 -->
+  <div id="summary" class="summary">
+    <div class="s-card">
+      <div class="s-num" id="sTotal">0</div>
+      <div class="s-label">扫描文件</div>
+    </div>
+    <div class="s-card green">
+      <div class="s-num" id="sGreen">0</div>
+      <div class="s-label">🟢 健康</div>
+    </div>
+    <div class="s-card yellow">
+      <div class="s-num" id="sYellow">0</div>
+      <div class="s-label">🟡 中风险</div>
+    </div>
+    <div class="s-card red">
+      <div class="s-num" id="sRed">0</div>
+      <div class="s-label">🔴 高风险</div>
+    </div>
+    <div class="s-card">
+      <div class="s-num" id="sScore">—</div>
+      <div class="s-label">平均健康度</div>
+    </div>
+    <div class="s-card">
+      <div class="s-num" id="sTodos">0</div>
+      <div class="s-label">TODO 总数</div>
+    </div>
+    <div class="s-card">
+      <div class="s-num" id="sLines">0</div>
+      <div class="s-label">代码行数</div>
+    </div>
+  </div>
+
+  <!-- 状态 -->
+  <div id="status" class="status">选择文件夹开始分析</div>
+
+  <!-- 文件表格 -->
+  <div id="tableWrap" class="table-wrap">
+    <table id="fileTable">
+      <thead>
+        <tr>
+          <th>文件</th>
+          <th>评分</th>
+          <th>行数</th>
+          <th>CCN</th>
+          <th>函数</th>
+          <th>TODO</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
