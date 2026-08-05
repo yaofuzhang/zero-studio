@@ -1,79 +1,94 @@
 let scanData = null;
-let currentFolder = '';
-
 const $ = s => document.querySelector(s);
-const $$ = s => document.querySelectorAll(s);
+const API = 'http://localhost:8765';
 
-// ─── API ───────────────────────────────────────────
-async function api(path, body) {
-  const res = await fetch(path, {
-    method: body ? 'POST' : 'GET',
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  return res.json();
-}
+// Wait for Neutralino
+Neutralino.init();
+
+Neutralino.events.on('ready', async () => {
+  // Launch Node.js server
+  try {
+    await Neutralino.os.execCommand('node server.js', { cwd: '../' });
+  } catch {}
+
+  // Give server a moment to start, then auto-scan
+  setTimeout(async () => {
+    try {
+      const res = await fetch(API + '/api/scan-recent', { method: 'POST' });
+      const data = await res.json();
+      if (data && data.summary) {
+        scanData = data;
+        showDashboard();
+        render(data);
+      }
+      loadRecent();
+    } catch {}
+  }, 1500);
+});
 
 // ─── Pick folder (native dialog) ───────────────────
 async function pickAndScan() {
-  const result = await api('/api/pick-folder');
-  if (result.folder) {
-    doScan(result.folder);
+  try {
+    const entries = await Neutralino.dialog.showOpenDialog('选择项目文件夹', {
+      defaultPath: 'C:/Users',
+    });
+    if (entries && entries.length > 0) {
+      doScan(entries[0]);
+    }
+  } catch {
+    // Fallback: manual input
+    const folder = prompt('输入文件夹路径:');
+    if (folder) doScan(folder);
   }
 }
 
-// ─── Scan folder ───────────────────────────────────
 async function doScan(folder) {
-  currentFolder = folder;
   $('#pathText').textContent = folder;
+  showDashboard();
+  try {
+    const res = await fetch(API + '/api/scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder }),
+    });
+    const report = await res.json();
+    if (report.error) { $('#pathText').textContent = '❌ ' + report.error; return; }
+    scanData = report;
+    render(report);
+  } catch {
+    $('#pathText').textContent = '❌ 服务未启动，请运行 node server.js';
+  }
+}
+
+// ─── Recent ────────────────────────────────────────
+async function loadRecent() {
+  try {
+    const res = await fetch(API + '/api/recent');
+    const recent = await res.json();
+    if (recent && recent.length > 0) {
+      $('#recentSection').style.display = 'block';
+      $('#recentList').innerHTML = recent.map(f => `
+        <div class="recent-folder" onclick="doScan('${escAttr(f)}')">
+          <span class="rf-icon">📁</span>
+          <span class="rf-path">${esc(f)}</span>
+          <span class="rf-arrow">→</span>
+        </div>
+      `).join('');
+    }
+  } catch {}
+}
+
+// ─── UI ────────────────────────────────────────────
+function showDashboard() {
   $('#welcome').classList.remove('active');
   $('#dashboard').classList.add('active');
-
-  const report = await api('/api/scan', { folder });
-  if (report.error) {
-    $('#pathText').textContent = '❌ ' + report.error;
-    return;
-  }
-  scanData = report;
-  render(report);
 }
 
-// ─── Buttons ───────────────────────────────────────
 $('#btnPick').addEventListener('click', pickAndScan);
 $('#btnPickBig').addEventListener('click', pickAndScan);
 
-// ─── Load recent + auto-scan ───────────────────────
-async function init() {
-  const recent = await api('/api/recent');
-  if (recent && recent.length > 0) {
-    // Show recent folders
-    $('#recentSection').style.display = 'block';
-    $('#recentList').innerHTML = recent.map(f => `
-      <div class="recent-folder" onclick="doScan('${escAttr(f)}')">
-        <span class="rf-icon">📁</span>
-        <span class="rf-path">${esc(f)}</span>
-        <span class="rf-arrow">→</span>
-      </div>
-    `).join('');
-  }
-
-  // Auto-scan most recent
-  const initial = await api('/api/scan-recent');
-  if (initial && !initial.error && initial.summary) {
-    currentFolder = initial.root;
-    scanData = initial;
-    $('#pathText').textContent = initial.root;
-    $('#welcome').classList.remove('active');
-    $('#dashboard').classList.add('active');
-    render(initial);
-  }
-}
-
-// ─── Render ────────────────────────────────────────
 function render(report) {
   const s = report.summary;
-
-  // Ring
   let color, level;
   if (s.avgScore < 40) { color = '#ef4444'; level = '需关注'; }
   else if (s.avgScore < 70) { color = '#eab308'; level = '一般'; }
@@ -85,8 +100,8 @@ function render(report) {
   $('#scoreValue').textContent = s.avgScore;
   $('#scoreValue').style.color = color;
   $('#scoreSub').textContent = level + ' · ' + s.total + ' 文件 · ' + s.totalLines.toLocaleString() + ' 行';
+  $('#pathText').textContent = report.root;
 
-  // Stats
   $('#statGreen').textContent = s.greens;
   $('#statYellow').textContent = s.yellows;
   $('#statRed').textContent = s.reds;
@@ -94,7 +109,6 @@ function render(report) {
   $('#statLines').textContent = s.totalLines.toLocaleString();
   $('#statTodos').textContent = s.totalTodos;
 
-  // Table
   $('#fileBody').innerHTML = report.files.map(f => `
     <tr>
       <td><span class="file-dot ${f.health.level}"></span>${esc(f.name)}</td>
@@ -106,15 +120,5 @@ function render(report) {
   `).join('');
 }
 
-// ─── Helpers ───────────────────────────────────────
-function esc(s) {
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
-}
-function escAttr(s) {
-  return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-// ─── Start ─────────────────────────────────────────
-init();
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function escAttr(s) { return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }

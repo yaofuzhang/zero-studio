@@ -1,0 +1,48 @@
+{
+  "applicationId": "labs.zero.studio",
+  "version": "1.0.0",
+  "defaultMode": "window",
+  "port": 0,
+  "documentRoot": "/www/",
+  "url": "/",
+  "enableServer": true,
+  "enableNativeAPI": true,
+  "tokenSecurity": "one-time",
+  "logging": {
+    "enabled": true,
+    "writeToLogFile": false
+  },
+  "nativeAllowlist": [
+    "app.*",
+    "os.*",
+    "dialog.*",
+    "filesystem.*",
+    "computer.*"
+  ],
+  "modes": {
+    "window": {
+      "title": "Zero Studio",
+      "width": 1100,
+      "height": 750,
+      "minWidth": 800,
+      "minHeight": 500,
+      "fullScreen": false,
+      "alwaysOnTop": false,
+      "icon": "/www/icon.png",
+      "enableInspector": false,
+      "borderless": false,
+      "maximize": true,
+      "hidden": false,
+      "resizable": true,
+      "exitProcessOnClose": true
+    }
+  },
+  "cli": {
+    "binaryName": "zero-studio",
+    "resourcesPath": "/www/",
+    "extensionsPath": "/extensions/",
+    "clientLibrary": "/www/neutralino.js",
+    "binaryVersion": "nightly",
+    "clientVersion": "nightly"
+  }
+}

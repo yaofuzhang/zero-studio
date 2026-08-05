@@ -1,15 +1,37 @@
 {
   "name": "zero-studio",
   "version": "1.0.0",
-  "description": "Zero Studio — 本地代码健康仪表盘",
-  "main": "server.js",
+  "description": "Zero Studio — 代码健康仪表盘桌面应用",
+  "main": "src/main.js",
   "author": "Zero Labs",
   "license": "MIT",
   "scripts": {
-    "start": "node server.js"
+    "start": "electron .",
+    "build": "electron-builder --win portable"
+  },
+  "build": {
+    "appId": "labs.zero.studio",
+    "productName": "Zero Studio",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**",
+      "engine/**",
+      "www/**"
+    ],
+    "win": {
+      "target": "portable",
+      "icon": "www/icon.png"
+    }
   },
   "dependencies": {
     "@babel/parser": "^7.24.0",
-    "@babel/traverse": "^7.24.0"
+    "@babel/traverse": "^7.24.0",
+    "@neutralinojs/neu": "^11.7.2"
+  },
+  "devDependencies": {
+    "electron": "28.2.0",
+    "electron-builder": "^25.0.0"
   }
 }
