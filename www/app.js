@@ -2,47 +2,58 @@ let scanData = null;
 const $ = s => document.querySelector(s);
 const API = 'http://localhost:8765';
 
-// Wait for Neutralino
 Neutralino.init();
 
-Neutralino.events.on('ready', async () => {
-  // Launch Node.js server
-  try {
-    await Neutralino.os.execCommand('node server.js', { cwd: '../' });
-  } catch {}
+let serverReady = false;
 
-  // Give server a moment to start, then auto-scan
-  setTimeout(async () => {
+Neutralino.events.on('ready', async () => {
+  // Wait for server with retry
+  for (let i = 0; i < 10; i++) {
     try {
-      const res = await fetch(API + '/api/scan-recent', { method: 'POST' });
-      const data = await res.json();
-      if (data && data.summary) {
-        scanData = data;
-        showDashboard();
-        render(data);
-      }
-      loadRecent();
+      const res = await fetch(API + '/api/recent');
+      if (res.ok) { serverReady = true; break; }
     } catch {}
-  }, 1500);
+    await new Promise(r => setTimeout(r, 800));
+  }
+
+  if (serverReady) {
+    loadRecent();
+    autoScan();
+  } else {
+    $('#pathText').textContent = '⚠️ 分析服务未启动 — 请运行 start.bat';
+  }
 });
 
-// ─── Pick folder (native dialog) ───────────────────
+async function autoScan() {
+  try {
+    const res = await fetch(API + '/api/scan-recent', { method: 'POST' });
+    const data = await res.json();
+    if (data && data.summary) {
+      scanData = data;
+      showDashboard();
+      render(data);
+    }
+  } catch {}
+}
+
+// ─── Pick folder (native Neutralino dialog) ─────────
 async function pickAndScan() {
   try {
     const entries = await Neutralino.dialog.showOpenDialog('选择项目文件夹', {
       defaultPath: 'C:/Users',
     });
-    if (entries && entries.length > 0) {
-      doScan(entries[0]);
-    }
+    if (entries && entries.length > 0) doScan(entries[0]);
   } catch {
-    // Fallback: manual input
     const folder = prompt('输入文件夹路径:');
     if (folder) doScan(folder);
   }
 }
 
 async function doScan(folder) {
+  if (!serverReady) {
+    $('#pathText').textContent = '⚠️ 服务未启动';
+    return;
+  }
   $('#pathText').textContent = folder;
   showDashboard();
   try {
@@ -56,7 +67,7 @@ async function doScan(folder) {
     scanData = report;
     render(report);
   } catch {
-    $('#pathText').textContent = '❌ 服务未启动，请运行 node server.js';
+    $('#pathText').textContent = '❌ 服务连接失败';
   }
 }
 
@@ -66,22 +77,26 @@ async function loadRecent() {
     const res = await fetch(API + '/api/recent');
     const recent = await res.json();
     if (recent && recent.length > 0) {
-      $('#recentSection').style.display = 'block';
-      $('#recentList').innerHTML = recent.map(f => `
-        <div class="recent-folder" onclick="doScan('${escAttr(f)}')">
-          <span class="rf-icon">📁</span>
-          <span class="rf-path">${esc(f)}</span>
-          <span class="rf-arrow">→</span>
-        </div>
-      `).join('');
+      const el = $('#recentSection');
+      if (el) { el.style.display = 'block'; }
+      const list = $('#recentList');
+      if (list) {
+        list.innerHTML = recent.map(f => `
+          <div class="recent-folder" onclick="doScan('${escAttr(f)}')">
+            <span class="rf-icon">📁</span>
+            <span class="rf-path">${esc(f)}</span>
+            <span class="rf-arrow">→</span>
+          </div>
+        `).join('');
+      }
     }
   } catch {}
 }
 
 // ─── UI ────────────────────────────────────────────
 function showDashboard() {
-  $('#welcome').classList.remove('active');
-  $('#dashboard').classList.add('active');
+  const w = $('#welcome'); if (w) w.classList.remove('active');
+  const d = $('#dashboard'); if (d) d.classList.add('active');
 }
 
 $('#btnPick').addEventListener('click', pickAndScan);
