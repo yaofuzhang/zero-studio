@@ -39,9 +39,23 @@ function waitForServer(retries = 30) {
 }
 
 function launchApp() {
-  const neu = spawn('npx', ['neu', 'run'], {
+  const neuExe = path.join(ROOT, 'bin', 'neutralino-win_x64.exe');
+  const neu = spawn(neuExe, [
+    '--load-dir-res',
+    '--path=.',
+    '--export-auth-info',
+    '--neu-dev-extension',
+    '--neu-dev-auto-reload',
+  ], {
     cwd: ROOT,
     stdio: 'inherit',
+  });
+
+  neu.on('error', (err) => {
+    console.error('无法启动 Neutralino:', err.message);
+    console.error('路径:', neuExe);
+    server.kill();
+    process.exit(1);
   });
 
   neu.on('close', () => {
