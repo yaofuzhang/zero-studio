@@ -1,29 +1,74 @@
 let scanData = null;
 const $ = s => document.querySelector(s);
 const API = 'http://localhost:8765';
-
-Neutralino.init();
-
 let serverReady = false;
 
-Neutralino.events.on('ready', async () => {
-  // Wait for server with retry
-  for (let i = 0; i < 10; i++) {
-    try {
-      const res = await fetch(API + '/api/recent');
-      if (res.ok) { serverReady = true; break; }
-    } catch {}
-    await new Promise(r => setTimeout(r, 800));
-  }
+console.log('app.js loaded, Neutralino:', typeof Neutralino);
 
-  if (serverReady) {
-    loadRecent();
-    autoScan();
+// ─── Wait for Neutralino to be available ────────────
+function waitForNeu(cb, retries) {
+  retries = retries || 50;
+  if (typeof Neutralino !== 'undefined' && Neutralino.init) {
+    cb();
+  } else if (retries > 0) {
+    setTimeout(() => waitForNeu(cb, retries - 1), 100);
   } else {
-    $('#pathText').textContent = '⚠️ 分析服务未启动 — 请运行 start.bat';
+    console.error('Neutralino not available after 5s');
+    $('#pathText').textContent = '⚠️ Neutralino 未加载 — 刷新页面试试';
   }
+}
+
+waitForNeu(() => {
+  console.log('Neutralino found, initializing...');
+  Neutralino.init();
+
+  Neutralino.events.on('ready', async () => {
+    console.log('Neutralino ready');
+
+    for (let i = 0; i < 15; i++) {
+      try {
+        const res = await fetch(API + '/api/recent');
+        if (res.ok) { serverReady = true; break; }
+      } catch {}
+      await new Promise(r => setTimeout(r, 500));
+    }
+
+    if (serverReady) {
+      console.log('Server ready');
+      loadRecent();
+      autoScan();
+    } else {
+      $('#pathText').textContent = '⚠️ 分析服务未启动';
+    }
+  });
 });
 
+// ─── Folder picker ─────────────────────────────────
+async function pickAndScan() {
+  if (typeof Neutralino === 'undefined' || !Neutralino.dialog) {
+    console.log('Neutralino.dialog not available, using prompt');
+    const folder = prompt('输入文件夹路径:');
+    if (folder) doScan(folder);
+    return;
+  }
+
+  try {
+    console.log('Opening dialog...');
+    const entries = await Neutralino.dialog.showOpenDialog('选择项目文件夹', {
+      defaultPath: 'C:/Users',
+    });
+    console.log('Dialog result:', entries);
+    if (entries && entries.length > 0) {
+      doScan(entries[0]);
+    }
+  } catch (e) {
+    console.error('Dialog failed:', e);
+    const folder = prompt('输入文件夹路径:');
+    if (folder) doScan(folder);
+  }
+}
+
+// ─── Scan ──────────────────────────────────────────
 async function autoScan() {
   try {
     const res = await fetch(API + '/api/scan-recent', { method: 'POST' });
@@ -36,24 +81,8 @@ async function autoScan() {
   } catch {}
 }
 
-// ─── Pick folder (native Neutralino dialog) ─────────
-async function pickAndScan() {
-  try {
-    const entries = await Neutralino.dialog.showOpenDialog('选择项目文件夹', {
-      defaultPath: 'C:/Users',
-    });
-    if (entries && entries.length > 0) doScan(entries[0]);
-  } catch {
-    const folder = prompt('输入文件夹路径:');
-    if (folder) doScan(folder);
-  }
-}
-
 async function doScan(folder) {
-  if (!serverReady) {
-    $('#pathText').textContent = '⚠️ 服务未启动';
-    return;
-  }
+  if (!serverReady) { $('#pathText').textContent = '⚠️ 服务未启动'; return; }
   $('#pathText').textContent = folder;
   showDashboard();
   try {
@@ -71,24 +100,18 @@ async function doScan(folder) {
   }
 }
 
-// ─── Recent ────────────────────────────────────────
 async function loadRecent() {
   try {
     const res = await fetch(API + '/api/recent');
     const recent = await res.json();
     if (recent && recent.length > 0) {
-      const el = $('#recentSection');
-      if (el) { el.style.display = 'block'; }
+      const el = $('#recentSection'); if (el) el.style.display = 'block';
       const list = $('#recentList');
-      if (list) {
-        list.innerHTML = recent.map(f => `
-          <div class="recent-folder" onclick="doScan('${escAttr(f)}')">
-            <span class="rf-icon">📁</span>
-            <span class="rf-path">${esc(f)}</span>
-            <span class="rf-arrow">→</span>
-          </div>
-        `).join('');
-      }
+      if (list) list.innerHTML = recent.map(f => `
+        <div class="recent-folder" onclick="doScan('${escAttr(f)}')">
+          <span class="rf-icon">📁</span><span class="rf-path">${esc(f)}</span><span class="rf-arrow">→</span>
+        </div>
+      `).join('');
     }
   } catch {}
 }
