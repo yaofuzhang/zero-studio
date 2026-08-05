@@ -3,94 +3,72 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Zero Studio — 代码健康仪表盘</title>
+<title>Zero Studio</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<!-- 侧边栏 -->
-<nav id="sidebar">
-  <div class="sb-brand">
-    <div class="sb-logo">⏺</div>
-    <div class="sb-title">Zero Studio</div>
+<!-- 顶部导航条 -->
+<header>
+  <div class="h-left">
+    <span class="h-logo">⏺</span>
+    <span class="h-brand">Zero Studio</span>
   </div>
-  <div class="sb-section">
-    <div class="sb-label">项目</div>
-    <div class="sb-item active" data-view="dashboard">📊 仪表盘</div>
-    <div class="sb-item" data-view="files">📄 文件列表</div>
-    <div class="sb-item" data-view="todos">🏷️ TODO 追踪</div>
+  <div class="h-center" id="pathDisplay">
+    <span class="path-icon">📂</span>
+    <span class="path-text" id="pathText">选择文件夹开始分析</span>
   </div>
-  <div class="sb-footer">
-    <div class="sb-item" onclick="window.open('https://github.com/yaofuzhang/zero-studio')">📦 GitHub</div>
-    <div class="sb-item" onclick="window.open('https://yaofuzhang.github.io/zerolabs-ext/pro/')">⭐ Pro</div>
+  <div class="h-right">
+    <button id="btnPick" class="h-btn primary">选择文件夹</button>
   </div>
-</nav>
+</header>
 
 <!-- 主区域 -->
-<main id="main">
-  <!-- 顶部 -->
-  <header id="topbar">
-    <div class="tb-left">
-      <!-- 面包屑风格的文件夹选择 -->
-      <button id="btnPick" class="tb-btn primary">📂 选择文件夹</button>
-      <span class="tb-path" id="tbPath">未选择文件夹</span>
-    </div>
-    <div class="tb-right">
-      <button id="btnRefresh" class="tb-btn">🔄 刷新</button>
-    </div>
-  </header>
-
-  <!-- 仪表盘视图 -->
-  <div id="view-dashboard" class="view active">
-    <!-- 摘要行 -->
-    <div class="score-row">
-      <div class="score-main" id="scoreMain">
-        <div class="score-ring" id="scoreRing">
-          <svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" fill="none" stroke="#2a2a45" stroke-width="8"/><circle id="scoreArc" cx="60" cy="60" r="52" fill="none" stroke="#34d399" stroke-width="8" stroke-linecap="round" stroke-dasharray="0 327" transform="rotate(-90 60 60)"/></svg>
-          <div class="score-value" id="scoreValue">—</div>
-        </div>
-        <div class="score-text">
-          <div class="score-label">整体健康度</div>
-          <div class="score-sub" id="scoreSub">选择一个文件夹开始分析</div>
-        </div>
-      </div>
-      <div class="stat-grid">
-        <div class="stat"><div class="stat-num" id="statFiles">0</div><div class="stat-label">扫描文件</div></div>
-        <div class="stat green"><div class="stat-num" id="statGreen">0</div><div class="stat-label">🟢 健康</div></div>
-        <div class="stat yellow"><div class="stat-num" id="statYellow">0</div><div class="stat-label">🟡 中风险</div></div>
-        <div class="stat red"><div class="stat-num" id="statRed">0</div><div class="stat-label">🔴 高风险</div></div>
-        <div class="stat"><div class="stat-num" id="statTodos">0</div><div class="stat-label">TODO</div></div>
-        <div class="stat"><div class="stat-num" id="statLines">0</div><div class="stat-label">代码行</div></div>
-      </div>
-    </div>
-
-    <!-- 空状态 / 拖拽区 -->
-    <div id="dropZone" class="drop-zone active">
-      <div class="drop-icon">📁</div>
-      <h2>拖拽文件夹到此处</h2>
-      <p>或点击顶部"选择文件夹"按钮</p>
-      <p class="drop-hint">支持 .ts .tsx .js .jsx 文件</p>
-    </div>
-
-    <!-- 高风险列表 -->
-    <div id="riskSection" style="display:none">
-      <div class="section-title">⚠️ 需要关注的文件</div>
-      <div id="riskList"></div>
+<main>
+  <!-- 欢迎 / 空状态 -->
+  <div id="welcome" class="welcome active">
+    <div class="welcome-icon">🔍</div>
+    <h2>分析代码库健康度</h2>
+    <p>选择项目文件夹，一键生成完整健康报告</p>
+    <button id="btnPickBig" class="big-btn">📂 选择文件夹</button>
+    <div class="recent-section" id="recentSection" style="display:none">
+      <div class="recent-label">最近分析</div>
+      <div id="recentList" class="recent-list"></div>
     </div>
   </div>
 
-  <!-- 文件列表视图 -->
-  <div id="view-files" class="view">
-    <table id="fileTable">
-      <thead><tr><th>文件名</th><th>行数</th><th>CCN</th><th>函数</th><th>TODO</th><th>评分</th></tr></thead>
-      <tbody id="fileBody"></tbody>
-    </table>
-  </div>
+  <!-- 仪表盘 -->
+  <div id="dashboard" class="dashboard">
+    <!-- 评分环形图 -->
+    <div class="d-score">
+      <div class="ds-ring">
+        <svg viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="50" fill="none" stroke="#1e1e38" stroke-width="10"/>
+          <circle id="scoreArc" cx="60" cy="60" r="50" fill="none" stroke="#22c55e" stroke-width="10" stroke-linecap="round" stroke-dasharray="0 314" transform="rotate(-90 60 60)"/>
+        </svg>
+        <div class="ds-value" id="scoreValue">—</div>
+      </div>
+      <div class="ds-label">整体健康度</div>
+      <div class="ds-sub" id="scoreSub"></div>
+    </div>
 
-  <!-- TODO 追踪视图 -->
-  <div id="view-todos" class="view">
-    <div id="todoSummary" class="todo-summary"></div>
-    <div id="todoList" class="todo-list"></div>
+    <!-- 统计条 -->
+    <div class="d-stats" id="dStats">
+      <div class="ds-item green"><span class="dsi-num" id="statGreen">0</span><span class="dsi-label">健康</span></div>
+      <div class="ds-item yellow"><span class="dsi-num" id="statYellow">0</span><span class="dsi-label">中风险</span></div>
+      <div class="ds-item red"><span class="dsi-num" id="statRed">0</span><span class="dsi-label">高风险</span></div>
+      <div class="ds-item"><span class="dsi-num" id="statFiles">0</span><span class="dsi-label">文件</span></div>
+      <div class="ds-item"><span class="dsi-num" id="statLines">0</span><span class="dsi-label">行代码</span></div>
+      <div class="ds-item"><span class="dsi-num" id="statTodos">0</span><span class="dsi-label">TODO</span></div>
+    </div>
+
+    <!-- 文件表格 -->
+    <div class="d-table-wrap">
+      <table>
+        <thead><tr><th>文件</th><th class="r">评分</th><th class="r">行数</th><th class="r">CCN</th><th class="r">TODO</th></tr></thead>
+        <tbody id="fileBody"></tbody>
+      </table>
+    </div>
   </div>
 </main>
 
