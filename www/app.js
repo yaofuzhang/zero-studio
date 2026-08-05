@@ -1,97 +1,68 @@
 let scanData = null;
 const $ = s => document.querySelector(s);
 const API = 'http://localhost:8765';
-let serverReady = false;
 
-console.log('app.js loaded, Neutralino:', typeof Neutralino);
-
-// ─── Wait for Neutralino to be available ────────────
-function waitForNeu(cb, retries) {
-  retries = retries || 50;
-  if (typeof Neutralino !== 'undefined' && Neutralino.init) {
-    cb();
-  } else if (retries > 0) {
-    setTimeout(() => waitForNeu(cb, retries - 1), 100);
-  } else {
-    console.error('Neutralino not available after 5s');
-    $('#pathText').textContent = '⚠️ Neutralino 未加载 — 刷新页面试试';
-  }
-}
-
-waitForNeu(() => {
-  console.log('Neutralino found, initializing...');
-  Neutralino.init();
-
-  Neutralino.events.on('ready', async () => {
-    console.log('Neutralino ready');
-
-    for (let i = 0; i < 15; i++) {
-      try {
-        const res = await fetch(API + '/api/recent');
-        if (res.ok) { serverReady = true; break; }
-      } catch {}
-      await new Promise(r => setTimeout(r, 500));
-    }
-
-    if (serverReady) {
-      console.log('Server ready');
-      loadRecent();
-      autoScan();
-    } else {
-      $('#pathText').textContent = '⚠️ 分析服务未启动';
-    }
-  });
-});
-
-// ─── Folder picker ─────────────────────────────────
-async function pickAndScan() {
-  if (typeof Neutralino === 'undefined' || !Neutralino.dialog) {
-    console.log('Neutralino.dialog not available, using prompt');
-    const folder = prompt('输入文件夹路径:');
-    if (folder) doScan(folder);
-    return;
+// ─── Init ───────────────────────────────────────────
+(async function init() {
+  // Wait for server
+  for (let i = 0; i < 20; i++) {
+    try { const r = await fetch(API + '/api/recent'); if (r.ok) break; } catch {}
+    await new Promise(r => setTimeout(r, 300));
   }
 
+  // Auto-scan recent folder
   try {
-    console.log('Opening dialog...');
-    const entries = await Neutralino.dialog.showOpenDialog('选择项目文件夹', {
-      defaultPath: 'C:/Users',
-    });
-    console.log('Dialog result:', entries);
-    if (entries && entries.length > 0) {
-      doScan(entries[0]);
+    const r = await fetch(API + '/api/scan-recent', { method: 'POST' });
+    const d = await r.json();
+    if (d && d.summary) {
+      scanData = d;
+      render(d);
+      showDashboard();
     }
-  } catch (e) {
-    console.error('Dialog failed:', e);
-    const folder = prompt('输入文件夹路径:');
-    if (folder) doScan(folder);
+  } catch {}
+
+  // Load recent list
+  try {
+    const r = await fetch(API + '/api/recent');
+    const recent = await r.json();
+    if (recent && recent.length > 0) {
+      $('#recentSection').style.display = 'block';
+      $('#recentList').innerHTML = recent.map(f => `
+        <div class="recent-folder" onclick="doScan('${escAttr(f)}')">
+          <span class="rf-icon">📁</span><span class="rf-path">${esc(f)}</span><span class="rf-arrow">→</span>
+        </div>
+      `).join('');
+    }
+  } catch {}
+})();
+
+// ─── Folder Picker: via server PowerShell ───────────
+async function pickAndScan() {
+  $('#pathText').textContent = '⏳ 打开文件夹选择器...';
+  try {
+    const r = await fetch(API + '/api/pick-folder', { method: 'POST' });
+    const data = await r.json();
+    if (data.folder) {
+      doScan(data.folder);
+    } else {
+      $('#pathText').textContent = '选择文件夹开始分析';
+    }
+  } catch {
+    $('#pathText').textContent = '❌ 服务连接失败';
   }
 }
 
 // ─── Scan ──────────────────────────────────────────
-async function autoScan() {
-  try {
-    const res = await fetch(API + '/api/scan-recent', { method: 'POST' });
-    const data = await res.json();
-    if (data && data.summary) {
-      scanData = data;
-      showDashboard();
-      render(data);
-    }
-  } catch {}
-}
-
 async function doScan(folder) {
-  if (!serverReady) { $('#pathText').textContent = '⚠️ 服务未启动'; return; }
-  $('#pathText').textContent = folder;
+  $('#pathText').textContent = '⏳ 扫描中...';
   showDashboard();
   try {
-    const res = await fetch(API + '/api/scan', {
+    const r = await fetch(API + '/api/scan', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ folder }),
     });
-    const report = await res.json();
+    const report = await r.json();
     if (report.error) { $('#pathText').textContent = '❌ ' + report.error; return; }
     scanData = report;
     render(report);
@@ -100,26 +71,10 @@ async function doScan(folder) {
   }
 }
 
-async function loadRecent() {
-  try {
-    const res = await fetch(API + '/api/recent');
-    const recent = await res.json();
-    if (recent && recent.length > 0) {
-      const el = $('#recentSection'); if (el) el.style.display = 'block';
-      const list = $('#recentList');
-      if (list) list.innerHTML = recent.map(f => `
-        <div class="recent-folder" onclick="doScan('${escAttr(f)}')">
-          <span class="rf-icon">📁</span><span class="rf-path">${esc(f)}</span><span class="rf-arrow">→</span>
-        </div>
-      `).join('');
-    }
-  } catch {}
-}
-
 // ─── UI ────────────────────────────────────────────
 function showDashboard() {
-  const w = $('#welcome'); if (w) w.classList.remove('active');
-  const d = $('#dashboard'); if (d) d.classList.add('active');
+  $('#welcome').classList.remove('active');
+  $('#dashboard').classList.add('active');
 }
 
 $('#btnPick').addEventListener('click', pickAndScan);
@@ -132,9 +87,8 @@ function render(report) {
   else if (s.avgScore < 70) { color = '#eab308'; level = '一般'; }
   else { color = '#22c55e'; level = '健康'; }
 
-  const dash = Math.max(1, (s.avgScore / 100) * 314);
   $('#scoreArc').setAttribute('stroke', color);
-  $('#scoreArc').setAttribute('stroke-dasharray', dash + ' 314');
+  $('#scoreArc').setAttribute('stroke-dasharray', Math.max(1, (s.avgScore / 100) * 314) + ' 314');
   $('#scoreValue').textContent = s.avgScore;
   $('#scoreValue').style.color = color;
   $('#scoreSub').textContent = level + ' · ' + s.total + ' 文件 · ' + s.totalLines.toLocaleString() + ' 行';
@@ -150,7 +104,7 @@ function render(report) {
   $('#fileBody').innerHTML = report.files.map(f => `
     <tr>
       <td><span class="file-dot ${f.health.level}"></span>${esc(f.name)}</td>
-      <td class="r"><span style="color:${f.health.level==='red'?'#ef4444':f.health.level==='yellow'?'#eab308':'#22c55e'};font-weight:600">${f.health.score}</span></td>
+      <td class="r"><span class="s-${f.health.level}">${f.health.score}</span></td>
       <td class="r">${f.lines.total}</td>
       <td class="r">${f.complexity.average}</td>
       <td class="r">${f.todos || 0}</td>
