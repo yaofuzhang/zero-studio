@@ -1,5 +1,4 @@
 @echo off
-echo Starting Zero Studio...
-start /B node server.js
-timeout /t 2 /nobreak >nul
-npx neu run
+cd /d "%~dp0"
+node launcher.js
+pause
