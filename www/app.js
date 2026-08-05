@@ -2,127 +2,183 @@ let currentFolder = '';
 let scanData = null;
 
 const $ = (s) => document.querySelector(s);
-const btnScan = $('#btnScan');
-const btnRefresh = $('#btnRefresh');
-const pathInput = $('#pathInput');
-const folderInfo = $('#folderInfo');
-const tableBody = $('#tableBody');
-const statusEl = $('#status');
+const $$ = (s) => document.querySelectorAll(s);
 
 // ─── API ───────────────────────────────────────────
 async function api(path, body) {
   const res = await fetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: body ? JSON.stringify(body) : undefined,
   });
   return res.json();
 }
 
 async function doScan(folder) {
   currentFolder = folder;
-  folderInfo.textContent = '⏳ 扫描中...';
-  statusEl.textContent = '⏳ 正在扫描 ' + folder + ' ...';
+  $('#tbPath').textContent = '⏳ 扫描中...';
   const report = await api('/api/scan', { folder });
   if (report.error) {
-    statusEl.textContent = '❌ ' + report.error;
+    $('#tbPath').textContent = '❌ ' + report.error;
     return;
   }
   scanData = report;
-  folderInfo.textContent = folder;
-  render(report);
+  $('#tbPath').textContent = folder;
+  renderAll(report);
 }
 
-// ─── Events ────────────────────────────────────────
-btnScan.addEventListener('click', () => {
-  const folder = pathInput.value.trim();
-  if (!folder) { statusEl.textContent = '请输入文件夹路径'; return; }
-  doScan(folder);
+// ─── Sidebar Navigation ────────────────────────────
+$$('.sb-item[data-view]').forEach(el => {
+  el.addEventListener('click', () => {
+    $$('.sb-item[data-view]').forEach(e => e.classList.remove('active'));
+    el.classList.add('active');
+    const view = el.dataset.view;
+    $$('.view').forEach(v => v.classList.remove('active'));
+    $('#view-' + view).classList.add('active');
+    if (scanData) updateView(view);
+  });
 });
 
-btnRefresh.addEventListener('click', () => {
-  if (!currentFolder) { statusEl.textContent = '请先扫描一个文件夹'; return; }
-  doScan(currentFolder);
+// ─── Folder Picker ─────────────────────────────────
+$('#btnPick').addEventListener('click', async () => {
+  const folder = prompt('输入文件夹路径（或拖拽文件夹到窗口）:', currentFolder || '');
+  if (folder && folder.trim()) doScan(folder.trim());
 });
 
-pathInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    const folder = pathInput.value.trim();
-    if (folder) doScan(folder);
-  }
+$('#btnRefresh').addEventListener('click', () => {
+  if (currentFolder) doScan(currentFolder);
 });
 
-// 拖拽文件夹
-document.addEventListener('dragover', (e) => { e.preventDefault(); });
-document.addEventListener('drop', (e) => {
+// ─── Drag & Drop ───────────────────────────────────
+const dropZone = $('#dropZone');
+dropZone.addEventListener('click', () => {
+  const folder = prompt('输入文件夹路径:', currentFolder || '');
+  if (folder && folder.trim()) doScan(folder.trim());
+});
+
+document.addEventListener('dragover', e => {
   e.preventDefault();
+  e.stopPropagation();
+  dropZone.classList.add('drag-over');
+});
+
+document.addEventListener('dragleave', e => {
+  e.preventDefault();
+  e.stopPropagation();
+  dropZone.classList.remove('drag-over');
+});
+
+document.addEventListener('drop', e => {
+  e.preventDefault();
+  e.stopPropagation();
+  dropZone.classList.remove('drag-over');
+
+  // 尝试从拖放获取路径
   const items = e.dataTransfer.items;
-  if (items && items[0]) {
-    const entry = items[0].webkitGetAsEntry();
-    if (entry && entry.isDirectory) {
-      // webkitGetAsEntry 返回的路径在 Windows 上不完整
-      // 使用 dataTransfer.files 获取路径
+  if (items) {
+    for (const item of items) {
+      if (item.kind === 'file') {
+        const entry = item.webkitGetAsEntry?.();
+        if (entry?.isDirectory) {
+          // 从 file 对象获取路径 (仅 Windows 有效)
+          const file = item.getAsFile();
+          if (file && file.path) {
+            // file.path 在 Electron 中可用，浏览器中可能需要手动输入
+          }
+        }
+      }
     }
   }
-  // Fallback: 从文件路径推断文件夹
-  if (e.dataTransfer.files.length > 0) {
-    const file = e.dataTransfer.files[0];
-    // 获取文件夹路径（跨浏览器兼容性差）
-    statusEl.textContent = '请将文件夹路径粘贴到输入框中';
-  }
+
+  // 浏览器安全限制：提示用户手动输入路径
+  const hint = prompt('浏览器安全限制，请输入拖拽的文件夹路径:', '');
+  if (hint && hint.trim()) doScan(hint.trim());
 });
 
-// ─── Render ────────────────────────────────────────
-function render(report) {
+// ─── Render All ────────────────────────────────────
+function renderAll(report) {
   const s = report.summary;
-  $('#sTotal').textContent = s.total;
-  $('#sGreen').textContent = s.greens;
-  $('#sYellow').textContent = s.yellows;
-  $('#sRed').textContent = s.reds;
-  $('#sScore').textContent = s.avgScore + '%';
-  $('#sTodos').textContent = s.totalTodos;
-  $('#sLines').textContent = s.totalLines.toLocaleString();
-  statusEl.textContent = `✅ 共 ${s.total} 个文件 · ${s.greens} 健康 · ${s.yellows} 中风险 · ${s.reds} 高风险`;
+  // 隐藏拖放区
+  dropZone.classList.remove('active');
+  $('#riskSection').style.display = 'block';
 
-  if (report.files.length === 0) {
-    tableBody.innerHTML = '<tr><td colspan="6" class="empty"><h2>未发现代码文件</h2><p>请选择包含 .ts/.js 文件的文件夹</p></td></tr>';
-    return;
+  // 评分环形图
+  let color;
+  if (s.avgScore < 40) color = '#ef4444';
+  else if (s.avgScore < 70) color = '#eab308';
+  else color = '#22c55e';
+
+  const dash = (s.avgScore / 100) * 327;
+  $('#scoreArc').setAttribute('stroke', color);
+  $('#scoreArc').setAttribute('stroke-dasharray', dash + ' 327');
+  $('#scoreValue').textContent = s.avgScore + '%';
+  $('#scoreValue').style.color = color;
+  $('#scoreSub').textContent = s.total + ' 个文件 · ' + s.totalLines.toLocaleString() + ' 行代码';
+
+  // 统计卡片
+  $('#statFiles').textContent = s.total;
+  $('#statGreen').textContent = s.greens;
+  $('#statYellow').textContent = s.yellows;
+  $('#statRed').textContent = s.reds;
+  $('#statTodos').textContent = s.totalTodos;
+  $('#statLines').textContent = s.totalLines.toLocaleString();
+
+  // 高风险列表
+  const risks = report.files.filter(f => f.health.level !== 'green');
+  if (risks.length === 0) {
+    $('#riskList').innerHTML = '<div class="risk-item"><span style="color:var(--green);font-size:14px">✅ 所有文件健康度良好</span></div>';
+  } else {
+    $('#riskList').innerHTML = risks.slice(0, 10).map(f => `
+      <div class="risk-item">
+        <div class="ri-score ${f.health.level}">${f.health.score}</div>
+        <div class="ri-info">
+          <div class="ri-name" title="${f.path}">${f.name}</div>
+          <div class="ri-meta">${f.lines.total} 行 · CCN ${f.complexity.average} · ${f.complexity.count} 函数 · ${f.todos} TODO</div>
+        </div>
+      </div>
+    `).join('');
   }
 
-  tableBody.innerHTML = report.files.map((f, i) => `
-    <tr onclick="showDetail(${i})">
-      <td><span class="badge badge-${f.health.level}"></span>${esc(f.name)}</td>
-      <td><span class="score-num score-${f.health.level}">${f.health.score}</span></td>
+  // 文件表格
+  $('#fileBody').innerHTML = report.files.map(f => `
+    <tr>
+      <td><span class="file-dot ${f.health.level}"></span>${esc(f.name)}</td>
       <td>${f.lines.total}</td>
       <td>${f.complexity.average}</td>
       <td>${f.complexity.count}</td>
       <td>${f.todos}</td>
+      <td><span style="color:${f.health.level === 'red' ? '#ef4444' : f.health.level === 'yellow' ? '#eab308' : '#22c55e'};font-weight:600">${f.health.score}</span></td>
     </tr>
   `).join('');
+
+  // TODO 视图
+  updateTodoView(report);
 }
 
-function showDetail(i) {
-  const f = scanData.files[i];
-  if (!f) return;
-  const funcs = f.complexity.perFunction
-    .sort((a, b) => b.complexity - a.complexity)
-    .slice(0, 5)
-    .map(fn => `  ${fn.name}: CCN ${fn.complexity} (L${fn.line})`)
-    .join('\n');
-
-  const msg = [
-    `📄 ${f.name}`,
-    `📏 行数: ${f.lines.total} (代码 ${f.lines.code} · 注释 ${f.lines.comment})`,
-    `🔄 圈复杂度: 总计 ${f.complexity.total} · 平均 ${f.complexity.average} · ${f.complexity.count} 函数`,
-    `🏷️ TODO: ${f.todos}`,
-    `❤️ 健康评分: ${f.health.score}/100`,
-    funcs ? `\n高复杂度函数:\n${funcs}` : '',
-  ].join('\n');
-  alert(msg);
+function updateView(view) {
+  if (!scanData) return;
+  if (view === 'todos') updateTodoView(scanData);
 }
 
+function updateTodoView(report) {
+  // 收集所有 TODO
+  // TODO items aren't currently stored per-file in the report - we'd need to add that
+  // For now, show a summary
+  $('#todoSummary').innerHTML = '<div class="todo-chip"><span style="color:var(--muted)">此功能需要扫描引擎升级 v1.1</span></div>';
+  $('#todoList').innerHTML = '';
+}
+
+// ─── Helpers ───────────────────────────────────────
 function esc(s) {
   const d = document.createElement('div');
   d.textContent = s;
   return d.innerHTML;
 }
+
+// Add file-dot style dynamically
+const style = document.createElement('style');
+style.textContent = `
+  .file-dot { display:inline-block; width:6px; height:6px; border-radius:50%; margin-right:8px; }
+  .file-dot.red { background:#ef4444; } .file-dot.yellow { background:#eab308; } .file-dot.green { background:#22c55e; }
+`;
+document.head.appendChild(style);
