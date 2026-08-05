@@ -1,78 +1,8 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Zero Studio</title>
-<link rel="stylesheet" href="style.css">
-</head>
-<body>
-
-<!-- 顶部导航条 -->
-<header>
-  <div class="h-left">
-    <span class="h-logo">⏺</span>
-    <span class="h-brand">Zero Studio</span>
-  </div>
-  <div class="h-center" id="pathDisplay">
-    <span class="path-icon">📂</span>
-    <span class="path-text" id="pathText">选择文件夹开始分析</span>
-  </div>
-  <div class="h-right">
-    <button id="btnPick" class="h-btn primary">选择文件夹</button>
-  </div>
-</header>
-
-<!-- 主区域 -->
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Zero Studio</title><link rel="stylesheet" href="style.css"></head><body>
+<header><div class="h-left"><span class="h-logo">⏺</span><span class="h-brand">Zero Studio</span></div><div class="h-center"><span class="path-icon">📂</span><span class="path-text" id="pathText">选择文件夹开始分析</span></div><div class="h-right"><button id="btnPick" class="h-btn primary">选择文件夹</button></div></header>
 <main>
-  <!-- 欢迎 / 空状态 -->
-  <div id="welcome" class="welcome active">
-    <div class="welcome-icon">🔍</div>
-    <h2>分析代码库健康度</h2>
-    <p>选择项目文件夹，一键生成完整健康报告</p>
-    <button id="btnPickBig" class="big-btn">📂 选择文件夹</button>
-    <div class="recent-section" id="recentSection" style="display:none">
-      <div class="recent-label">最近分析</div>
-      <div id="recentList" class="recent-list"></div>
-    </div>
-  </div>
-
-  <!-- 仪表盘 -->
-  <div id="dashboard" class="dashboard">
-    <!-- 评分环形图 -->
-    <div class="d-score">
-      <div class="ds-ring">
-        <svg viewBox="0 0 120 120">
-          <circle cx="60" cy="60" r="50" fill="none" stroke="#1e1e38" stroke-width="10"/>
-          <circle id="scoreArc" cx="60" cy="60" r="50" fill="none" stroke="#22c55e" stroke-width="10" stroke-linecap="round" stroke-dasharray="0 314" transform="rotate(-90 60 60)"/>
-        </svg>
-        <div class="ds-value" id="scoreValue">—</div>
-      </div>
-      <div class="ds-label">整体健康度</div>
-      <div class="ds-sub" id="scoreSub"></div>
-    </div>
-
-    <!-- 统计条 -->
-    <div class="d-stats" id="dStats">
-      <div class="ds-item green"><span class="dsi-num" id="statGreen">0</span><span class="dsi-label">健康</span></div>
-      <div class="ds-item yellow"><span class="dsi-num" id="statYellow">0</span><span class="dsi-label">中风险</span></div>
-      <div class="ds-item red"><span class="dsi-num" id="statRed">0</span><span class="dsi-label">高风险</span></div>
-      <div class="ds-item"><span class="dsi-num" id="statFiles">0</span><span class="dsi-label">文件</span></div>
-      <div class="ds-item"><span class="dsi-num" id="statLines">0</span><span class="dsi-label">行代码</span></div>
-      <div class="ds-item"><span class="dsi-num" id="statTodos">0</span><span class="dsi-label">TODO</span></div>
-    </div>
-
-    <!-- 文件表格 -->
-    <div class="d-table-wrap">
-      <table>
-        <thead><tr><th>文件</th><th class="r">评分</th><th class="r">行数</th><th class="r">CCN</th><th class="r">TODO</th></tr></thead>
-        <tbody id="fileBody"></tbody>
-      </table>
-    </div>
-  </div>
-</main>
-
-<script src="neutralino.js"></script>
-<script src="app.js"></script>
-</body>
-</html>
+<div id="welcome" class="welcome active"><div class="welcome-icon">🔍</div><h2>代码健康仪表盘</h2><p>选择项目文件夹，一键生成完整健康报告</p><button id="btnPickBig" class="big-btn">📂 选择文件夹</button><div class="recent-section" id="recentSection" style="display:none"><div class="recent-label">最近分析</div><div id="recentList" class="recent-list"></div></div></div>
+<div id="dashboard" class="dashboard"><div class="d-score"><div class="ds-ring"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="50" fill="none" stroke="#1e1e38" stroke-width="10"/><circle id="scoreArc" cx="60" cy="60" r="50" fill="none" stroke="#22c55e" stroke-width="10" stroke-linecap="round" stroke-dasharray="0 314" transform="rotate(-90 60 60)"/></svg><div class="ds-value" id="scoreValue">—</div></div><div class="ds-label">整体健康度</div><div class="ds-sub" id="scoreSub"></div></div>
+<div class="d-stats"><div class="ds-item green"><span class="dsi-num" id="statGreen">0</span><span class="dsi-label">健康</span></div><div class="ds-item yellow"><span class="dsi-num" id="statYellow">0</span><span class="dsi-label">中风险</span></div><div class="ds-item red"><span class="dsi-num" id="statRed">0</span><span class="dsi-label">高风险</span></div><div class="ds-item"><span class="dsi-num" id="statFiles">0</span><span class="dsi-label">文件</span></div><div class="ds-item"><span class="dsi-num" id="statLines">0</span><span class="dsi-label">行代码</span></div><div class="ds-item"><span class="dsi-num" id="statTodos">0</span><span class="dsi-label">TODO</span></div></div>
+<div class="d-table-wrap"><table><thead><tr><th>文件</th><th class="r">评分</th><th class="r">行数</th><th class="r">CCN</th><th class="r">TODO</th></tr></thead><tbody id="fileBody"></tbody></table></div></div>
+</main><script src="app.js"></script></body></html>

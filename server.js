@@ -2,118 +2,105 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { execSync, exec } = require('child_process');
-const { analyzeFolder } = require('./engine/analyzer');
+const { analyze } = require('./engine/analyzer');
 
 const PORT = 8765;
 const WWW = path.join(__dirname, 'www');
 const RECENT_FILE = path.join(__dirname, '.recent.json');
 
-const MIME = {
-  '.html': 'text/html; charset=utf-8',
-  '.css': 'text/css',
-  '.js': 'application/javascript',
-  '.json': 'application/json',
-  '.png': 'image/png',
-  '.svg': 'image/svg+xml',
-};
+const MIME = { '.html':'text/html; charset=utf-8','.css':'text/css','.js':'application/javascript','.json':'application/json','.png':'image/png','.svg':'image/svg+xml' };
+const CODE_EXTS = new Set(['.ts','.tsx','.js','.jsx','.mjs','.cjs']);
+const SKIP = new Set(['node_modules','.git','dist','build','out','target','.next']);
 
-// ─── Recent folders ────────────────────────────────
-function loadRecent() {
-  try { return JSON.parse(fs.readFileSync(RECENT_FILE, 'utf-8')); }
-  catch { return []; }
-}
+// ─── Recent ────────────────────────────────────────
+function loadRecent() { try { return JSON.parse(fs.readFileSync(RECENT_FILE,'utf-8')); } catch { return []; } }
+function saveRecent(f) { let l=loadRecent(); l=[f,...l.filter(x=>x!==f)].slice(0,10); fs.writeFileSync(RECENT_FILE,JSON.stringify(l)); }
 
-function saveRecent(folder) {
-  let list = loadRecent();
-  list = [folder, ...list.filter(f => f !== folder)].slice(0, 10);
-  fs.writeFileSync(RECENT_FILE, JSON.stringify(list));
-}
-
-// ─── Native folder picker (Windows) ─────────────────
-function pickFolderWindows() {
-  const ps = `
-    Add-Type -AssemblyName System.Windows.Forms
-    $f = New-Object System.Windows.Forms.FolderBrowserDialog
-    $f.Description = "选择要分析的项目文件夹"
-    $f.ShowNewFolderButton = $false
-    if ($f.ShowDialog() -eq "OK") { $f.SelectedPath }
-  `;
+// ─── Folder picker ─────────────────────────────────
+function pickFolder() {
   try {
-    const result = execSync(`powershell -NoProfile -Command "${ps.replace(/"/g, '\\"').replace(/\n/g, ' ')}"`, {
-      encoding: 'utf-8',
-      windowsHide: true,
-    });
-    return result.trim() || null;
-  } catch {
-    return null;
+    const ps = `Add-Type -AssemblyName System.Windows.Forms;$f=New-Object System.Windows.Forms.FolderBrowserDialog;$f.Description='选择项目文件夹';if($f.ShowDialog() -eq 'OK'){$f.SelectedPath}`;
+    return execSync(`powershell -NoProfile -Command "${ps.replace(/"/g,'\\"')}"`,{encoding:'utf8',windowsHide:true}).trim()||null;
+  } catch { return null; }
+}
+
+// ─── Scanner ───────────────────────────────────────
+function scanFolder(root) {
+  const files = [];
+  function walk(dir) {
+    let e; try { e = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const d of e) {
+      if (d.name.startsWith('.') || SKIP.has(d.name)) continue;
+      const full = path.join(dir, d.name);
+      if (d.isDirectory()) walk(full);
+      else if (d.isFile() && CODE_EXTS.has(path.extname(d.name).toLowerCase())) {
+        try {
+          const code = fs.readFileSync(full, 'utf-8');
+          const r = analyze(code);
+          files.push({
+            name: d.name, path: full,
+            lines_total: r.lines.total, lines_code: r.lines.code, lines_comment: r.lines.comment, lines_blank: r.lines.blank,
+            complexity_total: r.complexity.total, complexity_count: r.complexity.count, complexity_avg: r.complexity.average,
+            todos: r.todoCount, score: r.health.score, level: r.health.level,
+          });
+        } catch {}
+      }
+    }
   }
+  walk(root);
+  files.sort((a,b) => a.score - b.score);
+  return {
+    root, files,
+    summary: {
+      total_files: files.length,
+      green: files.filter(f=>f.level==='green').length,
+      yellow: files.filter(f=>f.level==='yellow').length,
+      red: files.filter(f=>f.level==='red').length,
+      avg_score: files.length ? Math.round(files.reduce((s,f)=>s+f.score,0)/files.length) : 100,
+      total_todos: files.reduce((s,f)=>s+f.todos,0),
+      total_lines: files.reduce((s,f)=>s+f.lines_code,0),
+    }
+  };
 }
 
 // ─── Server ─────────────────────────────────────────
 const server = http.createServer((req, res) => {
-  const sendJSON = (code, data) => {
-    res.writeHead(code, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(data));
-  };
+  const send = (code, data) => { res.writeHead(code,{'Content-Type':'application/json'}); res.end(JSON.stringify(data)); };
 
-  const readBody = () => new Promise(resolve => {
+  if (req.method==='GET' && req.url==='/api/recent') return send(200, loadRecent());
+
+  if (req.method==='POST' && req.url==='/api/pick-folder') {
+    const f = pickFolder();
+    return send(200, { folder: f });
+  }
+
+  if (req.method==='POST' && req.url==='/api/scan') {
     let body = '';
     req.on('data', c => body += c);
-    req.on('end', () => resolve(body));
-  });
-
-  // GET /api/recent — 最近扫描的文件夹
-  if (req.method === 'GET' && req.url === '/api/recent') {
-    return sendJSON(200, loadRecent());
-  }
-
-  // POST /api/pick-folder — 原生文件夹选择器
-  if (req.method === 'POST' && req.url === '/api/pick-folder') {
-    const folder = pickFolderWindows();
-    if (folder) {
-      saveRecent(folder);
-      return sendJSON(200, { folder });
-    }
-    return sendJSON(200, { folder: null });
-  }
-
-  // POST /api/scan — 扫描指定文件夹
-  if (req.method === 'POST' && req.url === '/api/scan') {
-    return readBody().then(body => {
+    req.on('end', () => {
       try {
         const { folder } = JSON.parse(body);
-        if (!folder || !fs.existsSync(folder)) {
-          return sendJSON(400, { error: '文件夹不存在' });
-        }
+        if (!folder || !fs.existsSync(folder)) return send(400, { error: '文件夹不存在' });
         saveRecent(folder);
-        const report = analyzeFolder(folder);
-        sendJSON(200, report);
-      } catch (e) {
-        sendJSON(500, { error: e.message });
-      }
+        send(200, scanFolder(folder));
+      } catch(e) { send(500, { error: e.message }); }
     });
+    return;
   }
 
-  // POST /api/scan-recent — 扫描最近文件夹（启动时自动）
-  if (req.method === 'POST' && req.url === '/api/scan-recent') {
+  if (req.method==='POST' && req.url==='/api/scan-recent') {
     const recent = loadRecent();
     if (recent.length > 0 && fs.existsSync(recent[0])) {
-      try {
-        const report = analyzeFolder(recent[0]);
-        return sendJSON(200, report);
-      } catch (e) {
-        return sendJSON(200, { error: e.message });
-      }
+      return send(200, scanFolder(recent[0]));
     }
-    return sendJSON(200, null);
+    return send(200, null);
   }
 
-  // Static files
-  let url = req.url === '/' ? '/index.html' : req.url;
-  const filePath = path.join(WWW, url);
-  const ext = path.extname(filePath);
-
-  fs.readFile(filePath, (err, data) => {
+  // Static
+  const url = req.url === '/' ? '/index.html' : req.url;
+  const fp = path.join(WWW, url);
+  const ext = path.extname(fp);
+  fs.readFile(fp, (err, data) => {
     if (err) { res.writeHead(404); res.end('Not found'); return; }
     res.writeHead(200, { 'Content-Type': MIME[ext] || 'text/plain' });
     res.end(data);
@@ -122,10 +109,6 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log(`\n  ✅ Zero Studio 已启动`);
-  console.log(`  🌐 http://localhost:${PORT}`);
-  console.log(`  📂 选择文件夹即可开始\n`);
-  const cmd = process.platform === 'win32'
-    ? `start http://localhost:${PORT}`
-    : process.platform === 'darwin' ? `open http://localhost:${PORT}` : `xdg-open http://localhost:${PORT}`;
-  exec(cmd);
+  console.log(`  🌐 http://localhost:${PORT}\n`);
+  exec(`start http://localhost:${PORT}`);
 });
