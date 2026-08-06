@@ -107,8 +107,15 @@ const server = http.createServer((req, res) => {
   });
 });
 
+server.on('error', (e) => {
+  if (e.code === 'EADDRINUSE') {
+    console.error(`❌ 端口 ${PORT} 被占用。请先关闭已运行的 Zero Studio。`);
+    process.exit(1);
+  }
+  throw e;
+});
 server.listen(PORT, () => {
-  console.log(`\n  ✅ Zero Studio 已启动`);
+  console.log(`\n  ✅ Zero Studio v2026.08.06 已启动`);
   console.log(`  🌐 http://localhost:${PORT}\n`);
   exec(`start http://localhost:${PORT}`);
 });
